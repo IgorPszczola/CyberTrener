@@ -1,0 +1,19 @@
+# Python compilation
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+.env
+
+# PyCharm specific
+.idea/
+
+# Database
+*.sqlite3
+*.db
+
+# OS specific
+.DS_Store
+Thumbs.db
