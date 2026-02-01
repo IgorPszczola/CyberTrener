@@ -1,29 +1,31 @@
 import cv2
 import numpy as np
 from collections import deque
-from src.logic.pose_detector import PoseDetector
-
 
 class BicepCurl:
     def __init__(self, detector):
         self.detector = detector
 
-        # Parametry
+        # Parametry (Twoje ustawienia)
         self.angle_down = 140
         self.angle_up = 50
         self.elbow_threshold = 30
         self.back_threshold = 11
 
-        # Stan
+        # Inicjalizacja stanu (wywołujemy reset na starcie)
+        self.reset()
+
+    def reset(self):
+        """Resetuje liczniki i stan przed nową serią"""
         self.angle_history = deque(maxlen=7)
         self.good_reps = 0
         self.bad_reps = 0
         self.dir = 0
         self.is_rep_clean = True
-        self.feedback = "OK"  # Komunikat dla użytkownika
+        self.feedback = "OK"
 
     def process(self, img):
-        # 1. Znajdź punkty (bez rysowania tutaj, rysowanie zrobimy w main)
+        # 1. Znajdź punkty
         lm_list = self.detector.find_position(img, draw=False)
 
         data = {
@@ -32,7 +34,8 @@ class BicepCurl:
             "percentage": 0,
             "feedback": "SZUKAM CIE...",
             "is_clean": True,
-            "landmarks": lm_list  # Przekazujemy punkty, żeby main mógł rysować
+            "landmarks": lm_list,
+            "current_angle": 0
         }
 
         if len(lm_list) != 0:
@@ -43,8 +46,7 @@ class BicepCurl:
 
             # Wygładzanie
             if raw_angle > 0: self.angle_history.append(raw_angle)
-            final_angle = int(sum(self.angle_history) / len(self.angle_history)) if self.angle_history else int(
-                raw_angle)
+            final_angle = int(sum(self.angle_history) / len(self.angle_history)) if self.angle_history else int(raw_angle)
 
             # Procenty
             per = np.interp(final_angle, (self.angle_up, self.angle_down), (100, 0))
@@ -77,5 +79,6 @@ class BicepCurl:
             data["percentage"] = int(per)
             data["feedback"] = self.feedback
             data["is_clean"] = self.is_rep_clean
+            data["current_angle"] = final_angle
 
         return data
