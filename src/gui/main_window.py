@@ -17,7 +17,7 @@ class MainWindow(QMainWindow):
 
         # --- NAPRAWA ŚCIEŻEK ---
         # Zakładamy, że uruchamiasz program z głównego folderu CyberTrener
-        self.bg_path = "assets/background.jpg"  # Zmieniono na jpg i folder assets
+        self.bg_path = "assets/background.png"  # Zmieniono na jpg i folder assets
         self.logo_path = "assets/logo.png"
 
         self.init_ui()

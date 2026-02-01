@@ -1,24 +1,79 @@
 import sys
 import os
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit,
-                             QFormLayout, QFrame)
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
+                             QPushButton, QLineEdit, QFrame, QDialog)  # Usunięto QMessageBox
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QColor, QFont
 from src.gui.styles import STYLESHEET
+from src.database.database_manager import DatabaseManager
+from src.gui.menu_window import MenuWindow
 
 
-# USUNIĘTO: from src.gui.main_window import MainWindow <-- TO POWODOWAŁO BŁĄD
+# --- KLASA: ŁADNE OKNO BŁĘDU (To samo co w rejestracji) ---
+class ErrorDialog(QDialog):
+    def __init__(self, message, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.resize(400, 300)
 
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Główna ramka - CZERWONA
+        self.frame = QFrame()
+        self.frame.setStyleSheet("""
+            QFrame {
+                background-color: #1a1a1a;
+                border: 2px solid #FF0000;
+                border-radius: 15px;
+            }
+        """)
+        frame_layout = QVBoxLayout(self.frame)
+        frame_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        frame_layout.setSpacing(20)
+
+        # Ikona X
+        lbl_icon = QLabel("✘")
+        lbl_icon.setStyleSheet(
+            "color: #FF0000; font-size: 80px; font-weight: bold; border: none; background: transparent;")
+        lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Tekst błędu
+        lbl_msg = QLabel(message)
+        lbl_msg.setWordWrap(True)
+        lbl_msg.setStyleSheet(
+            "color: white; font-size: 20px; font-weight: bold; border: none; background: transparent;")
+        lbl_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Przycisk
+        btn_ok = QPushButton("SPRÓBUJ PONOWNIE")
+        btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_ok.setStyleSheet("""
+            QPushButton { background-color: #FF0000; color: white; font-weight: bold; border-radius: 5px; padding: 10px 20px; font-size: 16px; }
+            QPushButton:hover { background-color: #CC0000; }
+        """)
+        btn_ok.clicked.connect(self.accept)
+
+        frame_layout.addWidget(lbl_icon)
+        frame_layout.addWidget(lbl_msg)
+        frame_layout.addWidget(btn_ok)
+
+        layout.addWidget(self.frame)
+        self.setLayout(layout)
+
+
+# --- GŁÓWNE OKNO LOGOWANIA ---
 class LoginWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CyberTrener - Logowanie")
         self.resize(1200, 850)
+        self.db = DatabaseManager()
 
         self.bg_pixmap = None
-        # Upewnij się, że ta ścieżka jest poprawna względem pliku main.py
-        if os.path.exists("assets/background.jpg"):
-            self.bg_pixmap = QPixmap("assets/background.jpg")
+        if os.path.exists("assets/background.png"):
+            self.bg_pixmap = QPixmap("assets/background.png")
 
         self.init_ui()
         self.setStyleSheet(STYLESHEET)
@@ -68,6 +123,7 @@ class LoginWindow(QMainWindow):
         btn_login = QPushButton("ZALOGUJ SIĘ")
         btn_login.setProperty("type", "red")
         btn_login.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_login.clicked.connect(self.handle_login)
 
         btn_back = QPushButton("POWRÓT")
         btn_back.setProperty("type", "light_grey")
@@ -81,9 +137,30 @@ class LoginWindow(QMainWindow):
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
+    def handle_login(self):
+        user = self.input_user.text()
+        pwd = self.input_pass.text()
+
+        # 1. Walidacja pustych pól
+        if not user or not pwd:
+            dialog = ErrorDialog("Wpisz login i hasło!", self)
+            dialog.exec()
+            return
+
+        # 2. Sprawdzenie w bazie
+        if self.db.check_login(user, pwd):
+            # Sukces -> Idziemy do Menu
+            self.menu = MenuWindow()
+            self.menu.show()
+            self.close()
+        else:
+            # Błąd -> Wyświetlamy stylowe czerwone okno
+            dialog = ErrorDialog("Nieprawidłowa nazwa użytkownika lub hasło.", self)
+            dialog.exec()
+            # Opcjonalnie: czyszczenie hasła
+            self.input_pass.clear()
+
     def go_back(self):
-        # Importujemy MainWindow TYLKO tutaj, w momencie kliknięcia.
-        # To zapobiega błędowi "Circular Import".
         from src.gui.main_window import MainWindow
         self.main_window = MainWindow()
         self.main_window.show()

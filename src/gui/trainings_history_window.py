@@ -1,9 +1,11 @@
 import sys
 import os
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView)
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
+                             QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QColor, QFont
 from src.gui.styles import STYLESHEET
+
 
 class TrainingsHistoryWindow(QMainWindow):
     def __init__(self):
@@ -12,8 +14,8 @@ class TrainingsHistoryWindow(QMainWindow):
         self.resize(1200, 850)
 
         self.bg_pixmap = None
-        if os.path.exists("assets/background.jpg"):
-            self.bg_pixmap = QPixmap("assets/background.jpg")
+        if os.path.exists("assets/background.png"):
+            self.bg_pixmap = QPixmap("assets/background.png")
 
         self.init_ui()
         self.setStyleSheet(STYLESHEET)
@@ -46,28 +48,21 @@ class TrainingsHistoryWindow(QMainWindow):
         table.setColumnCount(4)
         table.setHorizontalHeaderLabels(["Data treningu", "Opis", "Obciążenie", "Wynik"])
 
-        # Blokada zaznaczania i fokusa
         table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-
-        # Wyłączamy pionowy pasek przewijania (skoro tabela ma się dopasować do treści)
         table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-        # Ustawienia nagłówków poziomych
         header = table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
-        # Stała wysokość wiersza
         ROW_HEIGHT = 70
-
-        # Ustawienia nagłówków pionowych
         v_header = table.verticalHeader()
         v_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         v_header.setDefaultSectionSize(ROW_HEIGHT)
         v_header.setVisible(False)
 
-        # Przykładowe dane
+        # Dane demo
         data = [
             ("2023-10-27", "3 serie po 15 powtórzeń", "20 kg", "73/100"),
             ("2023-10-25", "3 serie po 15 powtórzeń", "25 kg", "78/100"),
@@ -75,27 +70,14 @@ class TrainingsHistoryWindow(QMainWindow):
         ]
 
         table.setRowCount(len(data))
-
         for row, (date, desc, weight, result) in enumerate(data):
-            item_date = QTableWidgetItem(date)
-            item_date.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            table.setItem(row, 0, item_date)
+            for col, val in enumerate([date, desc, weight, result]):
+                item = QTableWidgetItem(val)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                table.setItem(row, col, item)
 
-            item_desc = QTableWidgetItem(desc)
-            item_desc.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            table.setItem(row, 1, item_desc)
-
-            item_weight = QTableWidgetItem(weight)
-            item_weight.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            table.setItem(row, 2, item_weight)
-
-            item_res = QTableWidgetItem(result)
-            item_res.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            table.setItem(row, 3, item_res)
-
-        total_height = ROW_HEIGHT + (len(data) * ROW_HEIGHT)
-
-        table.setFixedHeight(total_height)
+        total_height = ROW_HEIGHT * (len(data) + 1)
+        table.setFixedHeight(total_height + 10)
 
         layout.addWidget(table)
         layout.addStretch()
@@ -104,10 +86,21 @@ class TrainingsHistoryWindow(QMainWindow):
         btn_back.setProperty("type", "light_grey")
         btn_back.setFixedSize(250, 70)
         btn_back.setCursor(Qt.CursorShape.PointingHandCursor)
+        # --- PODPIĘCIE AKCJI POWROTU ---
+        btn_back.clicked.connect(self.go_back_to_menu)
+
         layout.addWidget(btn_back, alignment=Qt.AlignmentFlag.AlignCenter)
 
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
+
+    def go_back_to_menu(self):
+        # Import wewnątrz funkcji
+        from src.gui.menu_window import MenuWindow
+        self.menu = MenuWindow()
+        self.menu.show()
+        self.close()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

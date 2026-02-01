@@ -1,84 +1,108 @@
-import cv2
 import numpy as np
+import time
+import math
 from collections import deque
+
 
 class BicepCurl:
     def __init__(self, detector):
         self.detector = detector
 
-        # Parametry (Twoje ustawienia)
-        self.angle_down = 140
-        self.angle_up = 50
-        self.elbow_threshold = 30
-        self.back_threshold = 11
+        # --- USTAWIENIA KALIBRACJI ---
+        self.up_angle = 50  # Kąt pełnego zgięcia (GÓRA)
+        self.down_angle = 145  # Kąt wyprostu (DÓŁ) - lekka tolerancja
 
-        # Inicjalizacja stanu (wywołujemy reset na starcie)
+        # Limity błędów
+        self.back_threshold = 12  # MAX 12 stopni odchylenia tułowia od pionu!
+        self.elbow_threshold = 30  # Tolerancja uciekania łokcia do przodu
+
         self.reset()
 
     def reset(self):
-        """Resetuje liczniki i stan przed nową serią"""
-        self.angle_history = deque(maxlen=7)
+        """Resetuje stan przed nową serią"""
+        self.dir = 0  # 0 = idzie w górę, 1 = wraca w dół
         self.good_reps = 0
         self.bad_reps = 0
-        self.dir = 0
-        self.is_rep_clean = True
         self.feedback = "OK"
 
-    def process(self, img):
-        # 1. Znajdź punkty
-        lm_list = self.detector.find_position(img, draw=False)
+        self.angle_history = deque(maxlen=4)
+        self.is_rep_clean = True
+        self.last_rep_time = 0
 
-        data = {
-            "reps_good": self.good_reps,
-            "reps_bad": self.bad_reps,
-            "percentage": 0,
-            "feedback": "SZUKAM CIE...",
-            "is_clean": True,
-            "landmarks": lm_list,
-            "current_angle": 0
-        }
+    def process(self, img):
+        lm_list = self.detector.find_position(img, draw=False)
+        pct = 0
 
         if len(lm_list) != 0:
-            # Kąty
-            raw_angle = self.detector.find_angle(img, 12, 14, 16, draw=False)
-            elbow_drift = self.detector.find_angle(img, 24, 12, 14, draw=False)
-            back_angle = self.detector.find_angle(img, 12, 24, 26, draw=False)
+            # --- 1. GEOMETRIA RĘKI (Do liczenia) ---
+            # Bark(12) - Łokieć(14) - Nadgarstek(16)
+            arm_angle = self.detector.find_angle(img, 12, 14, 16, draw=False)
 
-            # Wygładzanie
-            if raw_angle > 0: self.angle_history.append(raw_angle)
-            final_angle = int(sum(self.angle_history) / len(self.angle_history)) if self.angle_history else int(raw_angle)
+            # --- 2. NOWA DETEKCJA PLECÓW (PIONOWA) ---
+            # Zamiast łączyć z kolanem, liczymy odchylenie tułowia od idealnego pionu.
+            # Pobieramy koordynaty Barku (12) i Biodra (24)
+            x_shoulder, y_shoulder = lm_list[12][1], lm_list[12][2]
+            x_hip, y_hip = lm_list[24][1], lm_list[24][2]
 
-            # Procenty
-            per = np.interp(final_angle, (self.angle_up, self.angle_down), (100, 0))
+            # Obliczamy kąt nachylenia linii Bark-Biodro względem osi Y (Pionu)
+            # Jeśli stoisz prosto, delta X jest bliska 0.
+            if (y_hip - y_shoulder) != 0:
+                torso_inclination = math.degrees(math.atan2(abs(x_shoulder - x_hip), abs(y_hip - y_shoulder)))
+            else:
+                torso_inclination = 0
 
-            # --- DETEKCJA BŁĘDÓW ---
-            self.feedback = "OK"
-            if per > 5:
-                if elbow_drift > self.elbow_threshold:
-                    self.is_rep_clean = False
-                    self.feedback = "LOKIEC!"
+            # --- 3. DETEKCJA ŁOKCIA (DRIFT) ---
+            # Kąt: Biodro(24) - Bark(12) - Łokieć(14)
+            # Jeśli ręka wisi luźno wzdłuż ciała -> kąt ~0-10.
+            # Jeśli unosisz łokcie do przodu -> kąt rośnie.
+            elbow_drift_angle = self.detector.find_angle(img, 24, 12, 14, draw=False)
 
-                if back_angle > 0 and abs(180 - back_angle) > self.back_threshold:
-                    self.is_rep_clean = False
-                    self.feedback = "PLECY!"
+            # Wygładzanie kąta ręki
+            self.angle_history.append(arm_angle)
+            avg_angle = sum(self.angle_history) / len(self.angle_history)
 
-            # --- ZLICZANIE ---
-            if per == 100:
-                if self.dir == 0: self.dir = 1
+            # --- PASEK POSTĘPU ---
+            pct = np.interp(avg_angle, (self.up_angle, self.down_angle), (100, 0))
 
-            if per == 0:
+            # --- WYKRYWANIE BŁĘDÓW ---
+
+            # Błąd 1: BUJANIE PLECAMI
+            # Jeśli tułów odchyla się od pionu o więcej niż 12 stopni -> BŁĄD
+            if torso_inclination > self.back_threshold:
+                self.feedback = "PLECY!"
+                self.is_rep_clean = False
+
+            # Błąd 2: ŁOKCIE DO PRZODU
+            if elbow_drift_angle > self.elbow_threshold:
+                self.feedback = "LOKCIE!"
+                self.is_rep_clean = False
+
+            # --- ZLICZANIE (Góra -> Dół) ---
+
+            # Szczyt (Zgięcie)
+            if avg_angle < self.up_angle:
+                if self.dir == 0:
+                    self.dir = 1
+
+                    # Dół (Wyprost + Cooldown)
+            if avg_angle > self.down_angle:
                 if self.dir == 1:
-                    if self.is_rep_clean:
-                        self.good_reps += 1
-                    else:
-                        self.bad_reps += 1
-                    self.dir = 0
-                    self.is_rep_clean = True
+                    if time.time() - self.last_rep_time > 0.8:
+                        if self.is_rep_clean:
+                            self.good_reps += 1
+                        else:
+                            self.bad_reps += 1
 
-            # Aktualizacja danych wyjściowych
-            data["percentage"] = int(per)
-            data["feedback"] = self.feedback
-            data["is_clean"] = self.is_rep_clean
-            data["current_angle"] = final_angle
+                        self.last_rep_time = time.time()
+                        self.dir = 0
+                        self.is_rep_clean = True
+                        self.feedback = "OK"
 
-        return data
+        return {
+            "reps_good": self.good_reps,
+            "reps_bad": self.bad_reps,
+            "percentage": pct,
+            "feedback": self.feedback,
+            "landmarks": lm_list,
+            "is_clean": self.is_rep_clean
+        }

@@ -1,11 +1,12 @@
 import sys
 import json
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
-                             QSizePolicy)
+import os
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                             QLabel, QPushButton, QFrame, QSizePolicy, QProgressBar, QMessageBox)
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QPixmap, QColor, QFont, QImage
 from src.gui.styles import STYLESHEET
-from src.gui.camera_thread import CameraThread  # Import wątku
+from src.gui.camera_thread import CameraThread
 
 
 class TrainingWindow(QMainWindow):
@@ -15,13 +16,31 @@ class TrainingWindow(QMainWindow):
         self.resize(1200, 850)
         self.setStyleSheet(STYLESHEET)
 
-        # Wczytanie ustawień
-        self.settings = self.load_settings()
+        self.bg_pixmap = None
+        if os.path.exists("assets/background.png"):
+            self.bg_pixmap = QPixmap("assets/background.png")
 
+        # --- POPRAWKA TUTAJ ---
+        # Ustawiamy None, żeby wymusić pierwsze nałożenie stylu w init_ui
+        self.last_bar_color = None
+
+        self.settings = self.load_settings()
         self.init_ui()
 
-        # Start Kamery
+        self.is_closing = False
         self.start_camera()
+
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter
+        painter = QPainter(self)
+        if self.bg_pixmap:
+            scaled_bg = self.bg_pixmap.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                              Qt.TransformationMode.SmoothTransformation)
+            x = (self.width() - scaled_bg.width()) // 2
+            y = (self.height() - scaled_bg.height()) // 2
+            painter.drawPixmap(x, y, scaled_bg)
+        else:
+            painter.fillRect(self.rect(), QColor(20, 20, 20))
 
     def load_settings(self):
         try:
@@ -42,7 +61,6 @@ class TrainingWindow(QMainWindow):
         sb_layout.addSpacing(50)
         layout.addWidget(sidebar)
 
-        # Status
         self.lbl_status = QLabel("PRZYGOTUJ SIĘ")
         self.lbl_status.setObjectName("lbl_status")
         self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -50,14 +68,12 @@ class TrainingWindow(QMainWindow):
         sb_layout.addWidget(self.lbl_status)
         sb_layout.addSpacing(30)
 
-        # Karty info
         self.card_reps = self.create_info_card("POWTÓRZENIA", "0")
         sb_layout.addWidget(self.card_reps)
 
         self.card_sets = self.create_info_card("SERIA", "1 / 3")
         sb_layout.addWidget(self.card_sets)
 
-        # Feedback
         self.lbl_feedback = QLabel("")
         self.lbl_feedback.setStyleSheet("color: yellow; font-size: 24px; font-weight: bold;")
         self.lbl_feedback.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -71,20 +87,32 @@ class TrainingWindow(QMainWindow):
         btn_stop.clicked.connect(self.close_training)
         sb_layout.addWidget(btn_stop)
 
-        # --- OBSZAR KAMERY ---
-        cameras_widget = QWidget()
-        cameras_layout = QHBoxLayout(cameras_widget)
+        # --- OBSZAR KAMERY I PASKA ---
+        visuals_widget = QWidget()
+        visuals_layout = QHBoxLayout(visuals_widget)
+        visuals_layout.setContentsMargins(20, 20, 20, 20)
+        visuals_layout.setSpacing(20)
 
-        # Główny podgląd
         self.camera_view = QLabel("Ładowanie kamery...")
         self.camera_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.camera_view.setProperty("class", "camera_placeholder")
         self.camera_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        # Skalowanie obrazu
         self.camera_view.setScaledContents(True)
+        visuals_layout.addWidget(self.camera_view, stretch=4)
 
-        cameras_layout.addWidget(self.camera_view)
-        layout.addWidget(cameras_widget, stretch=1)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setOrientation(Qt.Orientation.Vertical)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedWidth(50)
+
+        # Teraz to zadziała, bo last_bar_color jest None
+        self.set_bar_style("green")
+
+        visuals_layout.addWidget(self.progress_bar, stretch=0)
+
+        layout.addWidget(visuals_widget, stretch=1)
 
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
@@ -99,49 +127,108 @@ class TrainingWindow(QMainWindow):
         l2.setProperty("class", "card_value")
         cl.addWidget(l1)
         cl.addWidget(l2)
-        # Przechowujemy referencję do labela z wartością, żeby go aktualizować
         card.value_label = l2
         return card
 
+    def set_bar_style(self, color_type):
+        # Sprawdzamy czy kolor się zmienił (żeby nie mrugać stylem co klatkę)
+        if color_type == self.last_bar_color:
+            return
+        self.last_bar_color = color_type
+
+        if color_type == "green":
+            color_code = "#00FF00"
+            bg_color = "#333"
+        elif color_type == "blue":
+            color_code = "#0088FF"
+            bg_color = "#002244"
+        else:  # Red
+            color_code = "#FF0000"
+            bg_color = "#330000"
+
+        style = f"""
+            QProgressBar {{
+                border: 2px solid #555;
+                border-radius: 10px;
+                background-color: {bg_color};
+                text-align: center;
+            }}
+            QProgressBar::chunk {{
+                background-color: {color_code};
+                border-radius: 8px;
+                margin: 2px;
+            }}
+        """
+        self.progress_bar.setStyleSheet(style)
+
     def start_camera(self):
-        # Pobieramy IP z ustawień
         ip = self.settings.get("camera_ip", 0)
         self.thread = CameraThread(camera_id=ip, settings=self.settings)
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.update_data_signal.connect(self.update_stats)
+        self.thread.finished_signal.connect(self.on_training_finished)
         self.thread.start()
 
     @pyqtSlot(QImage)
     def update_image(self, qt_img):
-        """Odbiera obraz z wątku i wyświetla w oknie"""
-        self.camera_view.setPixmap(QPixmap.fromImage(qt_img))
+        if not self.is_closing:
+            self.camera_view.setPixmap(QPixmap.fromImage(qt_img))
 
     @pyqtSlot(dict)
     def update_stats(self, data):
-        """Odbiera dane z wątku i aktualizuje napisy"""
-        # Status
-        if data["state"] == "ODLICZANIE":
+        if self.is_closing: return
+
+        state = data["state"]
+
+        if state == "ODLICZANIE":
             self.lbl_status.setText(f"START ZA: {data['timer']}")
+        elif state == "PRZERWA":
+            self.lbl_status.setText(f"PRZERWA: {data['timer']}")
+            self.set_bar_style("blue")
+            self.progress_bar.setValue(100)
+            self.lbl_feedback.setText("ODPOCZNIJ")
+            self.lbl_feedback.setStyleSheet("color: #0088FF; font-size: 28px; font-weight: bold;")
+            return
         else:
-            self.lbl_status.setText(data["state"])
+            self.lbl_status.setText(state)
 
-        # Powtórzenia
-        total = data["reps_good"] + data["reps_bad"]
         self.card_reps.value_label.setText(f"{data['reps_good']} OK / {data['reps_bad']} ZŁE")
-
-        # Seria
         self.card_sets.value_label.setText(data["set_info"])
 
-        # Feedback (błędy)
-        fb = data["feedback"]
-        self.lbl_feedback.setText(fb)
-        if "OK" in fb or fb == "":
-            self.lbl_feedback.setStyleSheet("color: #00FF00; font-size: 28px; font-weight: bold;")
-        else:
-            self.lbl_feedback.setStyleSheet("color: #FF0000; font-size: 28px; font-weight: bold;")
+        if state == "TRENING":
+            fb = data["feedback"]
+            self.lbl_feedback.setText(fb)
+            if fb == "OK" or fb == "":
+                self.lbl_feedback.setStyleSheet("color: #00FF00; font-size: 28px; font-weight: bold;")
+                self.set_bar_style("green")
+            else:
+                self.lbl_feedback.setStyleSheet("color: #FF0000; font-size: 28px; font-weight: bold;")
+                self.set_bar_style("red")
+
+            perc = int(data.get("percentage", 0))
+            self.progress_bar.setValue(perc)
+
+    def on_training_finished(self):
+        if self.is_closing: return
+        QMessageBox.information(self, "Koniec", "Trening zakończony! Dobra robota.")
+        self.close_training()
 
     def close_training(self):
+        self.is_closing = True
+
         if hasattr(self, 'thread'):
             self.thread.stop()
+
+        from src.gui.menu_window import MenuWindow
+        self.menu = MenuWindow()
+        self.menu.show()
+
         self.close()
-        # Tu można dodać powrót do Menu
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    app.setFont(QFont("Roboto", 12))
+    window = TrainingWindow()
+    window.show()
+    sys.exit(app.exec())
