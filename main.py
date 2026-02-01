@@ -2,27 +2,83 @@ import cv2
 import time
 import numpy as np
 import json
+import os
+from datetime import datetime
 from src.logic.pose_detector import PoseDetector
 from src.logic.bicep_curl import BicepCurl
 
+# --- KONFIGURACJA PLIKÓW ---
+SETTINGS_FILE = "settings.json"
+HISTORY_FILE = "user_history.json"
 
+
+def load_settings():
+    """Wczytuje ustawienia z pliku (komunikacja z Frontendem)"""
+    try:
+        with open(SETTINGS_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("! Nie znaleziono settings.json - używam domyślnych.")
+        return {
+            "camera_ip": 0,
+            "exercise_type": "ILOSC",
+            "target_reps": 10,
+            "series_count": 3,
+            "break_time": 30
+        }
+
+
+def save_to_history(session_data):
+    """Dopisuje trening do historii użytkownika (Baza Danych)"""
+    history = []
+
+    # 1. Wczytaj istniejącą historię (jeśli jest)
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r") as f:
+                history = json.load(f)
+        except:
+            pass  # Plik pusty lub uszkodzony
+
+    # 2. Dodaj nowy wpis
+    wpis = {
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "exercise": "BICEPS",
+        "mode": session_data["mode"],
+        "total_series": len(session_data["series_data"]),
+        "details": session_data["series_data"]
+    }
+    history.append(wpis)
+
+    # 3. Zapisz całość
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(history, f, indent=4)
+    print(f"--- ZAPISANO DO HISTORII ({len(history)} treningów) ---")
+
+
+# --- PLACEHOLDER DLA KOLEGI OD GŁOSU ---
+def play_voice(command):
+    """
+    Tu kolega wstawi kod odtwarzający dźwięk.
+    Dostępne komendy: 'start', 'break', 'error_back', 'error_elbow', 'good_job', 'finish'
+    """
+    pass
+
+
+# ==========================================
+# GŁÓWNA PĘTLA
+# ==========================================
 def main():
-    # ==========================================
-    # 1. KONFIGURACJA TRENINGU
-    # ==========================================
-    ILOSC_SERII = 3
-    CZAS_PRZERWY = 30
+    # 1. WCZYTANIE USTAWIEŃ Z FRONTENDU
+    config = load_settings()
 
-    # Tryb ćwiczenia: "ILOSC" lub "UPADEK"
-    TRYB_CWICZENIA = "UPADEK"
-    CEL_POWTORZEN = 10
+    IP_CAMERA_URL = config.get("camera_ip", 0)
+    ILOSC_SERII = config.get("series_count", 3)
+    CZAS_PRZERWY = config.get("break_time", 30)
+    TRYB_CWICZENIA = config.get("exercise_type", "UPADEK")
+    CEL_POWTORZEN = config.get("target_reps", 10)
 
-    IP_CAMERA_URL = 'http://192.168.18.13:4747/video'
-    # IP_CAMERA_URL = 0 # Laptop camera
-
-    # ==========================================
     # 2. INICJALIZACJA
-    # ==========================================
     cap = cv2.VideoCapture(IP_CAMERA_URL)
     cap.set(3, 640)
     cap.set(4, 480)
@@ -34,7 +90,7 @@ def main():
 
     # Stany
     STAN_ODLICZANIE = 1
-    STAN_POZYCJA = 2  # Tutaj robimy walidację
+    STAN_POZYCJA = 2
     STAN_TRENING = 3
     STAN_PRZERWA = 4
     STAN_KONIEC = 5
@@ -44,22 +100,21 @@ def main():
     historia_treningu = []
 
     print(f"START TRENINGU: {TRYB_CWICZENIA}, Serie: {ILOSC_SERII}")
+    play_voice("start")
 
     while True:
         success, img = cap.read()
         if not success:
-            print("Brak klatki z kamery.")
+            print("Brak klatki.")
             break
 
         img = detector.find_pose(img, draw=False)
         lm_list = detector.find_position(img, draw=False)
         czas_trwania_stanu = time.time() - timer_start
 
-        # =========================================================
-        # MASZYNA STANÓW
-        # =========================================================
+        # --- MASZYNA STANÓW ---
 
-        # --- KROK 4: ODLICZANIE (10s) ---
+        # 1. ODLICZANIE
         if aktualny_stan == STAN_ODLICZANIE:
             CZAS_NA_START = 10
             pozostalo = int(CZAS_NA_START - czas_trwania_stanu) + 1
@@ -71,108 +126,75 @@ def main():
             cv2.putText(img, f"SERIA {aktualna_seria}/{ILOSC_SERII}", (180, 100), cv2.FONT_HERSHEY_PLAIN, 3,
                         (255, 255, 255), 3)
             cv2.putText(img, str(pozostalo), (280, 300), cv2.FONT_HERSHEY_PLAIN, 10, (0, 255, 255), 10)
-            cv2.putText(img, "PRZYGOTUJ SIE", (160, 400), cv2.FONT_HERSHEY_PLAIN, 3, (255, 255, 255), 3)
+            # --- DODANO NAPIS ---
+            cv2.putText(img, "USTAW SIE", (180, 400), cv2.FONT_HERSHEY_PLAIN, 3, (255, 255, 255), 3)
 
             if czas_trwania_stanu > CZAS_NA_START:
                 aktualny_stan = STAN_POZYCJA
                 timer_start = time.time()
 
-        # --- KROK 5: SPRAWDZENIE POSTAWY (TERAZ DZIAŁA NAPRAWDĘ!) ---
+        # 2. POZYCJA
         elif aktualny_stan == STAN_POZYCJA:
-            # 1. Pobieramy aktualne kąty (bez rysowania, tylko obliczenia)
-            # Używamy progów z klasy trenera (11 stopni dla pleców, 30 dla łokcia)
-
             postawa_ok = True
-            komunikat = "TRZYMAJ POZYCJE..."
-            kolor_komunikatu = (0, 255, 0)  # Zielony
+            komunikat = "TRZYMAJ..."
+            col_kom = (0, 255, 0)
 
             if len(lm_list) != 0:
-                # Kąt pleców
                 back_angle = detector.find_angle(img, 12, 24, 26, draw=False)
-                # Kąt łokcia (czy przy ciele)
                 elbow_drift = detector.find_angle(img, 24, 12, 14, draw=False)
 
-                # WALIDACJA PLECÓW
-                if back_angle > 0:  # Jeśli widać nogi
-                    if abs(180 - back_angle) > trener.back_threshold:
-                        postawa_ok = False
-                        komunikat = "WYPROSTUJ PLECY!"
-                        kolor_komunikatu = (0, 0, 255)  # Czerwony
+                if back_angle > 0 and abs(180 - back_angle) > trener.back_threshold:
+                    postawa_ok = False
+                    komunikat = "PLECY!"
+                    col_kom = (0, 0, 255)
+                    play_voice("error_back")
 
-                        # Rysujemy linię błędu
-                        p12 = (lm_list[12][1], lm_list[12][2])
-                        p24 = (lm_list[24][1], lm_list[24][2])
-                        cv2.line(img, p12, p24, (0, 0, 255), 4)
-
-                # WALIDACJA ŁOKCIA (Tylko jeśli plecy są OK, żeby nie zasypać błędami)
                 if postawa_ok and elbow_drift > trener.elbow_threshold:
                     postawa_ok = False
-                    komunikat = "LOKCIE DO CIALA!"
-                    kolor_komunikatu = (0, 0, 255)
+                    komunikat = "LOKCIE!"
+                    col_kom = (0, 0, 255)
+                    play_voice("error_elbow")
 
-                    p12 = (lm_list[12][1], lm_list[12][2])
-                    p14 = (lm_list[14][1], lm_list[14][2])
-                    cv2.line(img, p12, p14, (0, 0, 255), 4)
-
-            # LOGIKA CZASOWA
             if not postawa_ok:
-                # Jeśli pozycja zła -> RESETUJEMY licznik czasu!
                 timer_start = time.time()
                 czas_trwania_stanu = 0
 
-            # Wyświetlanie
-            pozostalo_do_startu = 3.0 - czas_trwania_stanu
-            if pozostalo_do_startu < 0: pozostalo_do_startu = 0
+            bar_w = int(np.interp(czas_trwania_stanu, (0, 3), (0, 400)))
+            cv2.rectangle(img, (120, 350), (120 + bar_w, 380), col_kom, -1)
+            cv2.putText(img, komunikat, (50, 250), cv2.FONT_HERSHEY_PLAIN, 3, col_kom, 3)
 
-            # Pasek postępu sprawdzania
-            bar_width = int(np.interp(czas_trwania_stanu, (0, 3), (0, 400)))
-            cv2.rectangle(img, (120, 350), (520, 380), (50, 50, 50), -1)
-            cv2.rectangle(img, (120, 350), (120 + bar_width, 380), kolor_komunikatu, -1)
-
-            cv2.putText(img, komunikat, (50, 250), cv2.FONT_HERSHEY_PLAIN, 3, kolor_komunikatu, 3)
-
-            if postawa_ok:
-                cv2.putText(img, f"START ZA: {pozostalo_do_startu:.1f}s", (180, 450), cv2.FONT_HERSHEY_PLAIN, 2,
-                            (255, 255, 255), 2)
-
-            # PRZEJŚCIE DALEJ (Tylko jeśli utrzymano pozycję przez 3 sekundy)
             if czas_trwania_stanu > 3:
                 aktualny_stan = STAN_TRENING
                 trener.reset()
                 timer_start = time.time()
+                play_voice("good_job")
 
-        # --- KROK 7 & 8: TRENING WŁAŚCIWY ---
+        # 3. TRENING
         elif aktualny_stan == STAN_TRENING:
             data = trener.process(img)
-            zakoncz_serie = False
+            zakoncz = False
 
-            # WARUNKI ZAKOŃCZENIA
+            if data["feedback"] == "PLECY!": play_voice("error_back")
+            if data["feedback"] == "LOKIEC!": play_voice("error_elbow")
+
             if TRYB_CWICZENIA == "ILOSC":
                 limit = CEL_POWTORZEN
                 cv2.putText(img, f"CEL: {limit}", (450, 50), cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 2)
-                if (data["reps_good"] + data["reps_bad"]) >= limit:
-                    zakoncz_serie = True
+                if (data["reps_good"] + data["reps_bad"]) >= limit: zakoncz = True
 
             elif TRYB_CWICZENIA == "UPADEK":
-                cv2.putText(img, "TRYB: UPADEK", (400, 50), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), 2)
+                cv2.putText(img, "UPADEK", (450, 50), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), 2)
                 lm = data["landmarks"]
                 if len(lm) != 0:
                     try:
-                        # Warunek: Nadgarstek (16) niżej niż Kolano (26) + margines
-                        wrist_y = lm[16][2]
-                        knee_y = lm[26][2]
-                        wykonane = data["reps_good"] + data["reps_bad"]
-
-                        if wrist_y > (knee_y - 50) and wykonane > 0:
-                            zakoncz_serie = True
+                        if lm[16][2] > (lm[26][2] - 50) and (data["reps_good"] + data["reps_bad"]) > 0:
+                            zakoncz = True
                     except:
                         pass
 
-            # WIZUALIZACJA
             per = data["percentage"]
             col = (0, 255, 0) if data["is_clean"] else (0, 0, 255)
             bar_y = int(np.interp(per, (0, 100), (650, 100)))
-
             cv2.rectangle(img, (550, 100), (625, 650), col, 3)
             cv2.rectangle(img, (550, bar_y), (625, 650), col, cv2.FILLED)
             cv2.putText(img, f'{int(per)}%', (550, 75), cv2.FONT_HERSHEY_PLAIN, 4, col, 4)
@@ -184,7 +206,6 @@ def main():
             if data["feedback"] != "OK":
                 cv2.putText(img, f'{data["feedback"]}', (150, 250), cv2.FONT_HERSHEY_PLAIN, 4, (0, 0, 255), 4)
 
-            # RYSOWANIE SZKIELETU
             lm = data["landmarks"]
             if len(lm) != 0:
                 p12, p14, p16 = (lm[12][1], lm[12][2]), (lm[14][1], lm[14][2]), (lm[16][1], lm[16][2])
@@ -192,51 +213,48 @@ def main():
                 cv2.line(img, p14, p16, (255, 255, 255), 3)
                 cv2.circle(img, p14, 8, col, cv2.FILLED)
 
-            if zakoncz_serie:
-                print(f"KONIEC SERII {aktualna_seria}.")
-                historia_treningu.append({
-                    "seria": aktualna_seria,
-                    "dobre": data["reps_good"],
-                    "zle": data["reps_bad"]
-                })
+            if zakoncz:
+                historia_treningu.append({"seria": aktualna_seria, "dobre": data["reps_good"], "zle": data["reps_bad"]})
                 if aktualna_seria < ILOSC_SERII:
                     aktualny_stan = STAN_PRZERWA
                     aktualna_seria += 1
                     timer_start = time.time()
+                    play_voice("break")
                 else:
                     aktualny_stan = STAN_KONIEC
-                    timer_start = time.time()
+                    play_voice("finish")
 
-        # --- KROK 11: PRZERWA ---
+        # 4. PRZERWA
         elif aktualny_stan == STAN_PRZERWA:
-            czas_do_konca = int(CZAS_PRZERWY - czas_trwania_stanu) + 1
+            left = int(CZAS_PRZERWY - czas_trwania_stanu) + 1
             cv2.rectangle(img, (0, 0), (640, 480), (50, 50, 50), -1)
             cv2.putText(img, "PRZERWA", (200, 150), cv2.FONT_HERSHEY_PLAIN, 4, (0, 255, 0), 4)
-            cv2.putText(img, str(czas_do_konca), (280, 300), cv2.FONT_HERSHEY_PLAIN, 10, (255, 255, 255), 10)
+            cv2.putText(img, str(left), (280, 300), cv2.FONT_HERSHEY_PLAIN, 10, (255, 255, 255), 10)
 
-            ost_seria = historia_treningu[-1]
-            cv2.putText(img, f"Ostatnia: {ost_seria['dobre']} OK / {ost_seria['zle']} BLAD", (50, 50),
-                        cv2.FONT_HERSHEY_PLAIN, 1.5, (200, 200, 200), 1)
+            if left <= 10: cv2.putText(img, "PRZYGOTUJ SIE...", (150, 400), cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 255), 3)
 
             if czas_trwania_stanu > CZAS_PRZERWY:
                 aktualny_stan = STAN_ODLICZANIE
                 timer_start = time.time()
 
-        # --- KROK 12: KONIEC ---
+        # 5. KONIEC
         elif aktualny_stan == STAN_KONIEC:
             cv2.rectangle(img, (0, 0), (640, 480), (0, 0, 0), -1)
-            cv2.putText(img, "TRENING UKONCZONY", (50, 100), cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 3)
-            y_pos = 200
-            for seria in historia_treningu:
-                tekst = f"Seria {seria['seria']}: {seria['dobre']} OK, {seria['zle']} ZLE"
-                cv2.putText(img, tekst, (50, y_pos), cv2.FONT_HERSHEY_PLAIN, 1.5, (255, 255, 255), 2)
-                y_pos += 40
-            cv2.putText(img, "'Q' - Wyjscie", (200, 450), cv2.FONT_HERSHEY_PLAIN, 2, (100, 100, 100), 2)
+            cv2.putText(img, "KONIEC TRENINGU", (50, 100), cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 3)
+            y = 200
+            for s in historia_treningu:
+                cv2.putText(img, f"S{s['seria']}: {s['dobre']} OK / {s['zle']} ZLE", (50, y), cv2.FONT_HERSHEY_PLAIN,
+                            1.5, (255, 255, 255), 2)
+                y += 40
+            cv2.putText(img, "'Q' - ZAPISZ I WYJDZ", (150, 450), cv2.FONT_HERSHEY_PLAIN, 2, (150, 150, 150), 2)
 
-        cv2.imshow("CyberTrener", img)
+        cv2.imshow("CyberTrener Final", img)
         if cv2.waitKey(1) & 0xFF == ord('q'):
-            with open("raport_treningu.json", "w") as f:
-                json.dump(historia_treningu, f)
+            dane_sesji = {
+                "mode": TRYB_CWICZENIA,
+                "series_data": historia_treningu
+            }
+            save_to_history(dane_sesji)
             break
 
     cap.release()

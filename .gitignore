@@ -17,3 +17,7 @@ __pycache__/
 # OS specific
 .DS_Store
 Thumbs.db
+
+user_history.json
+raport_treningu.json
+last_workout_report.json
