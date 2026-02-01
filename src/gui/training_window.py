@@ -1,12 +1,13 @@
 import sys
 import json
 import os
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QSizePolicy, QProgressBar, QMessageBox)
-from PyQt6.QtWidgets import QDialog
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                             QLabel, QPushButton, QFrame, QSizePolicy, QProgressBar, QMessageBox, QInputDialog, QDialog)
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QPixmap, QColor, QFont, QImage
 from src.gui.styles import STYLESHEET
 from src.gui.camera_thread import CameraThread
+from src.database.database_manager import DatabaseManager
 
 class SummaryDialog(QDialog):
     def __init__(self, stats, parent=None):
@@ -318,27 +319,46 @@ class TrainingWindow(QMainWindow):
     def on_training_finished(self):
         if self.is_closing: return
         
-        # 1. Zbieramy statystyki z wątku głównego (jeśli istnieje)
+        # 1. Zbieramy statystyki
+        good = self.thread_main.trener.good_reps if hasattr(self, 'thread_main') else 0
+        bad = self.thread_main.trener.bad_reps if hasattr(self, 'thread_main') else 0
+        
+        total = good + bad
+        grade = "BRAK DANYCH"
+        if total > 0:
+            ratio = good / total
+            if ratio > 0.8: grade = "MISTRZ!"
+            elif ratio > 0.5: grade = "DOBRZE"
+            else: grade = "POPRAW TECHNIKĘ"
+
+        # --- PYTANIE O CIĘŻAR ---
+        weight, ok = QInputDialog.getDouble(self, "Zapisz Wynik", 
+                                          "Z jakim obciążeniem ćwiczyłeś? (kg):", 
+                                          10.0, 0, 200, 1)
+        if not ok: weight = 0.0
+
+        break_time = int(self.settings.get("break_time", 30))
+
+        # --- ZAPIS DO BAZY (Dostosowany do nowego diagramu) ---
+        db = DatabaseManager()
+        
+        # Używamy loginu 'gosc' (zostanie zamieniony na ID w bazie)
+        # Jeśli masz już system logowania, tu powinna być zmienna self.current_username
+        current_username = "gosc" 
+        
+        db.save_workout(current_username, "Biceps", weight, good, bad, grade, break_time)
+
+        # Wyświetlamy podsumowanie
         stats = {
             'sets': f"{self.thread_main.current_set} / {self.thread_main.total_sets}",
-            'good': self.thread_main.trener.good_reps if self.thread_main else 0,
-            'bad': self.thread_main.trener.bad_reps if self.thread_main else 0,
-            'grade': "ŚWIETNIE!" # Domyślna ocena
+            'good': good,
+            'bad': bad,
+            'grade': grade
         }
-
-        # Prosta logika oceny
-        total = stats['good'] + stats['bad']
-        if total > 0:
-            ratio = stats['good'] / total
-            if ratio > 0.8: stats['grade'] = "MISTRZ!"
-            elif ratio > 0.5: stats['grade'] = "DOBRZE"
-            else: stats['grade'] = "POPRAW TECHNIKĘ"
-
-        # 2. Wyświetlamy ładne okno zamiast QMessageBox
+        
         dialog = SummaryDialog(stats, self)
         dialog.exec()
         
-        # 3. Zamykamy trening
         self.close_training()
 
     def close_training(self):

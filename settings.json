@@ -2,7 +2,7 @@
     "camera_ip": "http://192.168.18.13:4747/video",
     "exercise_type": "ILOSC",
     "target_reps": 7,
-    "series_count": 2,
+    "series_count": 1,
     "break_time": 10,
     "weight": "10"
 }
