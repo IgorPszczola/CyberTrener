@@ -12,7 +12,7 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # 1. TABELA UZYTKOWNICY (Zgodnie z diagramem)
+        # 1. TABELA UZYTKOWNICY
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS uzytkownicy (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,8 +22,7 @@ class DatabaseManager:
             )
         """)
 
-        # 2. TABELA TRENINGI (Zgodnie z diagramem)
-        # Łączymy się kluczem obcym (id_uzytkownika)
+        # 2. TABELA TRENINGI
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS treningi (
                 id_treningu INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +35,7 @@ class DatabaseManager:
             )
         """)
         
-        # Tworzymy domyślnego użytkownika "Gość", żeby kod działał bez logowania
+        # Tworzymy domyślnego użytkownika "Gość"
         cursor.execute("INSERT OR IGNORE INTO uzytkownicy (imie, nazwa_uzytkownika, haslo) VALUES ('Gość', 'gosc', '1234')")
         
         conn.commit()
@@ -51,7 +50,7 @@ class DatabaseManager:
         conn.close()
         return result[0] if result else None
 
-    # --- ZAPISYWANIE TRENINGU (Dostosowane do diagramu) ---
+    # --- ZAPISYWANIE TRENINGU ---
     def save_workout(self, username, exercise, weight, good, bad, grade, break_time):
         """
         Mapowanie danych na kolumny z diagramu:
@@ -61,7 +60,7 @@ class DatabaseManager:
         """
         user_id = self.get_user_id(username)
         
-        # Jeśli nie znaleziono usera (np. wpisujesz 'Gość' a go nie ma), użyj domyślnego ID 1
+        # Jeśli nie znaleziono usera użyj domyślnego ID 1
         if not user_id:
             user_id = 1 
 
@@ -70,7 +69,7 @@ class DatabaseManager:
         # Tworzymy opis zawierający te dane, dla których nie ma osobnych kolumn na diagramie
         full_description = f"{exercise} | Przerwa: {break_time}s | Ocena: {grade} | Szczegóły: {good} OK / {bad} ZŁE"
         
-        # Obciążenie jako tekst (zgodnie z diagramem)
+        # Obciążenie jako tekst
         weight_text = f"{weight} kg"
         
         # Wynik jako liczba (suma powtórzeń)

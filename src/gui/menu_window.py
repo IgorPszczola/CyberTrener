@@ -12,7 +12,6 @@ class MenuWindow(QMainWindow):
         self.resize(1200, 850)
 
         self.bg_pixmap = None
-        # Poprawiona ścieżka
         if os.path.exists("assets/background.png"):
             self.bg_pixmap = QPixmap("assets/background.png")
 
