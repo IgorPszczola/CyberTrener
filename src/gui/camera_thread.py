@@ -11,15 +11,14 @@ class CameraThread(QThread):
     update_data_signal = pyqtSignal(dict)
     finished_signal = pyqtSignal()
 
-    # Dodano parametr is_analysis=True
     def __init__(self, camera_id=0, settings=None, is_analysis=True):
         super().__init__()
         self.camera_id = camera_id
-        self.is_analysis = is_analysis # CZY TO KAMERA GŁÓWNA?
+        self.is_analysis = is_analysis
         self._run_flag = True
         self.settings = settings or {}
 
-        # Inicjalizacja detektorów TYLKO jeśli robimy analizę
+        # Inicjalizacja detektorów
         if self.is_analysis:
             self.detector = PoseDetector()
             self.trener = BicepCurl(self.detector)
@@ -27,7 +26,7 @@ class CameraThread(QThread):
             self.detector = None
             self.trener = None
 
-        # Zmienne stanu (tylko dla kamery głównej)
+        # Zmienne stanu
         self.state = "ODLICZANIE"
         self.start_time = time.time()
         
@@ -59,14 +58,12 @@ class CameraThread(QThread):
 
             # --- TRYB 1: TYLKO PODGLĄD (Druga kamera) ---
             if not self.is_analysis:
-                # Tylko wysyłamy obraz, żadnej matematyki
                 qt_img = self.convert_cv_qt(cv_img)
                 self.change_pixmap_signal.emit(qt_img)
                 time.sleep(0.03) # 30 FPS
                 continue
 
             # --- TRYB 2: ANALIZA (Główna kamera) ---
-            
             # Detekcja
             cv_img = self.detector.find_pose(cv_img, draw=False)
             elapsed = time.time() - self.start_time

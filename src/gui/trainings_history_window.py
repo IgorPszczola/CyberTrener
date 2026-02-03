@@ -43,7 +43,6 @@ class TrainingsHistoryWindow(QMainWindow):
         lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(lbl_title)
 
-        # ZMIANA: Dodano kolumnę "Ocena" i "Ćwiczenie" zamiast długiego "Opisu"
         table = QTableWidget()
         # Kolumny: Data | Ćwiczenie | Ocena | Obciążenie | Wynik
         table.setColumnCount(5)
@@ -55,7 +54,6 @@ class TrainingsHistoryWindow(QMainWindow):
         table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         header = table.horizontalHeader()
-        # Rozciągamy kolumny ładnie
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # Data dopasowana
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)          # Ćwiczenie szerokie
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents) # Ocena dopasowana
@@ -76,9 +74,6 @@ class TrainingsHistoryWindow(QMainWindow):
         
         for row, (date, raw_desc, weight, result) in enumerate(data_from_db):
             # --- PARSOWANIE OPISU ---
-            # Surowy opis to np: "Biceps | Przerwa: 10s | Ocena: MISTRZ! | Szczegóły..."
-            # Chcemy wyciągnąć samo "Biceps" i samo "MISTRZ!"
-            
             exercise = "Trening" # Domyślnie
             grade = "-"
             
@@ -105,7 +100,7 @@ class TrainingsHistoryWindow(QMainWindow):
             else:
                 grade_item.setForeground(QColor("#FFFFFF")) # Biały
 
-            # Układamy wiersz: Data, Ćwiczenie, Ocena, Obciążenie, Wynik
+            # Data, Ćwiczenie, Ocena, Obciążenie, Wynik
             items = [
                 QTableWidgetItem(date),
                 QTableWidgetItem(exercise),
@@ -114,7 +109,7 @@ class TrainingsHistoryWindow(QMainWindow):
                 QTableWidgetItem(str(result))
             ]
             
-            # Wstawiamy do tabeli (pomijając index 2 bo to jest grade_item który już mamy)
+            # Wstawiamy do tabeli
             table.setItem(row, 0, items[0]) # Data
             table.setItem(row, 1, items[1]) # Ćwiczenie
             table.setItem(row, 2, items[2]) # Ocena (specjalna)

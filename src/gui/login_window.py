@@ -1,15 +1,14 @@
 import sys
 import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
-                             QPushButton, QLineEdit, QFrame, QDialog)  # Usunięto QMessageBox
+                             QPushButton, QLineEdit, QFrame, QDialog)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QColor, QFont
 from src.gui.styles import STYLESHEET
 from src.database.database_manager import DatabaseManager
 from src.gui.menu_window import MenuWindow
 
-
-# --- KLASA: ŁADNE OKNO BŁĘDU (To samo co w rejestracji) ---
+# --- KLASA: ŁADNE OKNO BŁĘDU ---
 class ErrorDialog(QDialog):
     def __init__(self, message, parent=None):
         super().__init__(parent)
@@ -149,15 +148,13 @@ class LoginWindow(QMainWindow):
 
         # 2. Sprawdzenie w bazie
         if self.db.check_login(user, pwd):
-            # Sukces -> Idziemy do Menu
             self.menu = MenuWindow()
             self.menu.show()
             self.close()
         else:
-            # Błąd -> Wyświetlamy stylowe czerwone okno
+            # Błąd
             dialog = ErrorDialog("Nieprawidłowa nazwa użytkownika lub hasło.", self)
             dialog.exec()
-            # Opcjonalnie: czyszczenie hasła
             self.input_pass.clear()
 
     def go_back(self):

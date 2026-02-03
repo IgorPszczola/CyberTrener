@@ -8,13 +8,13 @@ class BicepCurl:
     def __init__(self, detector):
         self.detector = detector
 
-        # --- 1. USTAWIENIA (Kalibracja od Igora - jest lepsza) ---
+        # --- 1. USTAWIENIA ---
         self.up_angle = 50      # Kąt pełnego zgięcia
         self.down_angle = 145   # Kąt wyprostu
         self.back_threshold = 12   # Tolerancja pleców (stopnie)
         self.elbow_threshold = 30  # Tolerancja łokcia (stopnie)
 
-        # --- 2. MODUŁ GŁOSOWY (Twój dodatek) ---
+        # --- 2. MODUŁ GŁOSOWY ---
         print("--- INICJALIZACJA TRENERA ---")
         try:
             self.voice = VoiceService()
@@ -25,7 +25,7 @@ class BicepCurl:
             self.voice = None
 
         self.last_feedback_time = 0
-        self.FEEDBACK_COOLDOWN = 3.0 # Żeby nie gadał za często
+        self.FEEDBACK_COOLDOWN = 3.0
 
         self.reset()
 
@@ -48,9 +48,7 @@ class BicepCurl:
         pct = 0
         current_time = time.time()
 
-        if len(lm_list) != 0:
-            # --- MATEMATYKA IGORA (Lepsze wykrywanie) ---
-            
+        if len(lm_list) != 0:  
             # 1. Kąt ręki
             arm_angle = self.detector.find_angle(img, 12, 14, 16, draw=False)
 
@@ -95,7 +93,7 @@ class BicepCurl:
                     if self.voice: self.voice.speak("Trzymaj łokcie blisko ciała")
                     self.last_feedback_time = current_time
 
-            # --- ZLICZANIE (Logika Igora + Twój głos) ---
+            # --- ZLICZANIE ---
             
             # Ruch w górę
             if avg_angle < self.up_angle:
@@ -123,7 +121,7 @@ class BicepCurl:
                         self.dir = 0
                         self.is_rep_clean = True
 
-        # Tworzymy słownik danych (Format Igora, ale zwracamy tuple dla Twojego wątku)
+        # Tworzymy słownik danych
         data = {
             "reps_good": self.good_reps,
             "reps_bad": self.bad_reps,
@@ -136,5 +134,5 @@ class BicepCurl:
             "debug_elbow": int(elbow_drift_angle) if 'elbow_drift_angle' in locals() else 0
         }
 
-        # Zwracamy img i data (Żeby Twój CameraThread był zadowolony)
+        # Zwracamy img i data
         return img, data

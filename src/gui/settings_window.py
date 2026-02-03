@@ -122,7 +122,7 @@ class SettingsWindow(QMainWindow):
         r3_layout.addWidget(self.slider)
         main_layout.addWidget(row3)
 
-        # --- RZĄD 4: TRYB (NAPRAWIONY LAYOUT) ---
+        # --- RZĄD 4: TRYB ---
         row4 = QFrame()
         row4.setProperty("class", "setting_row")
         r4_layout = QVBoxLayout(row4)
@@ -144,7 +144,7 @@ class SettingsWindow(QMainWindow):
 
         r4_layout.addSpacing(10)
 
-        # Opcja 2: Na ilość (HBox dla ładnego ułożenia)
+        # Opcja 2: Na ilość
         hbox_reps = QHBoxLayout()
         self.rb_reps = QRadioButton("Na ilość powtórzeń:")
         self.rb_reps.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -158,7 +158,7 @@ class SettingsWindow(QMainWindow):
         hbox_reps.addWidget(self.rb_reps)
         hbox_reps.addSpacing(10)
         hbox_reps.addWidget(self.input_reps)
-        hbox_reps.addStretch()  # Dopychamy do lewej
+        hbox_reps.addStretch()
 
         r4_layout.addLayout(hbox_reps)
 
@@ -228,8 +228,6 @@ class SettingsWindow(QMainWindow):
                     else:
                         self.rb_reps.setChecked(True)
                         self.input_reps.setText(str(data.get("target_reps", 10)))
-                    # Obciążenie (nie było w JSON, ale dodajemy obsługę)
-                    # self.input_weight.setText(...) - jeśli dodasz to do JSONa
             except:
                 pass  # Błąd odczytu, zostają domyślne
 
@@ -260,9 +258,9 @@ class SettingsWindow(QMainWindow):
             except:
                 target_reps = 10
 
-                # 3. Budujemy słownik, używając starego IP (old_ip)
+        # 3. Budujemy słownik, używając starego IP (old_ip)
         settings_data = {
-            "camera_ip": old_ip,  # <-- TERAZ ZACHOWUJEMY TWÓJ LINK!
+            "camera_ip": old_ip, 
             "exercise_type": mode,
             "target_reps": target_reps,
             "series_count": series,

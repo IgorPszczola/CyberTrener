@@ -73,7 +73,7 @@ class TrainingWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CyberTrener - Trening (Dual View)")
-        self.resize(1400, 900) # Nieco szersze okno
+        self.resize(1400, 900)
         self.setStyleSheet(STYLESHEET)
 
         self.bg_pixmap = None
@@ -199,7 +199,7 @@ class TrainingWindow(QMainWindow):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(20) # Cienki pasek
+        self.progress_bar.setFixedHeight(20)
         self.set_bar_style("green")
 
         visuals_layout.addWidget(self.progress_bar)
@@ -210,7 +210,7 @@ class TrainingWindow(QMainWindow):
 
     def start_cameras(self):
         # ---------------- USTAWIENIA ----------------
-        link_telefon = "http://192.168.0.198:4747/video"
+        link_telefon = "http://10.105.94.15:4747/video"
         laptop_id = 0
         # --------------------------------------------
 
@@ -319,10 +319,10 @@ class TrainingWindow(QMainWindow):
     def on_training_finished(self):
         if self.is_closing: return
         
-        # 1. Zbieramy statystyki
+        # Zbieramy statystyki
         good = self.thread_main.trener.good_reps if hasattr(self, 'thread_main') else 0
         bad = self.thread_main.trener.bad_reps if hasattr(self, 'thread_main') else 0
-        
+        current_username = "gosc" 
         total = good + bad
         grade = "BRAK DANYCH"
         if total > 0:
@@ -331,21 +331,14 @@ class TrainingWindow(QMainWindow):
             elif ratio > 0.5: grade = "DOBRZE"
             else: grade = "POPRAW TECHNIKĘ"
 
-        # --- PYTANIE O CIĘŻAR ---
-        weight, ok = QInputDialog.getDouble(self, "Zapisz Wynik", 
-                                          "Z jakim obciążeniem ćwiczyłeś? (kg):", 
-                                          10.0, 0, 200, 1)
-        if not ok: weight = 0.0
+        try:
+            weight = float(self.settings.get("weight", 0.0))
+        except (ValueError, TypeError):
+            weight = 0.0
 
         break_time = int(self.settings.get("break_time", 30))
 
-        # --- ZAPIS DO BAZY (Dostosowany do nowego diagramu) ---
         db = DatabaseManager()
-        
-        # Używamy loginu 'gosc' (zostanie zamieniony na ID w bazie)
-        # Jeśli masz już system logowania, tu powinna być zmienna self.current_username
-        current_username = "gosc" 
-        
         db.save_workout(current_username, "Biceps", weight, good, bad, grade, break_time)
 
         # Wyświetlamy podsumowanie
